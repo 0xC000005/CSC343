@@ -1,0 +1,50 @@
+===============================================================================
+[Q1] Find the countries where more languages are spoken than in the country 
+     with code 'MEX'.
+
+     Report the code of the country (as attribute 'code') and the number of 
+     languages spoken in the country (as attribute 'numlanguages'). Order does
+     not matter.
+
+     Hint: Find the number of languages spoken in 'MEX' and use that subquery
+     in a HAVING clause. And remember that you must use single quotes on your
+     strings in SQL.
+-------------------------------------------------------------------------------
+WITH mex_languages AS (SELECT count(DISTINCT countrylanguage.countrylanguage) AS numlanguages
+                       FROM countrylanguage
+                       WHERE countrycode = 'MEX')
+SELECT code,
+       count(DISTINCT countrylanguage.countrylanguage) AS numlanguages
+FROM country
+         JOIN  countrylanguage ON country.code = countrylanguage.countrycode
+GROUP BY country.code
+HAVING count(DISTINCT countrylanguage.countrylanguage) > (SELECT numlanguages FROM mex_languages);
+
+
+
+===============================================================================
+[Q2] Find all countries where 'English' is the most commonly spoken language 
+     (based on percentage). English doesn't have to surpass all other languages
+     in the country; if it is tied for first place, that is sufficient. Note 
+     that, for some countries, every percentage in the datase is 0, so English
+     will satisfy the condition in a not very meaningful way. Don't do anything
+     to exclude those countries.
+
+     Report the country names only (as attribute 'country'); do not include 
+     any duplicates.
+
+     Hint: For each country, find the percentage for English and check 
+     whether it's >= the percentage for all the other languages spoken there.
+
+-------------------------------------------------------------------------------
+WITH highest_language_percentage AS (SELECT countrycode, max(percentage) AS max_percentage
+                                     FROM countrylanguage
+                                     GROUP BY countrycode)
+SELECT country.name AS country
+FROM country JOIN countrylanguage ON country.code = countrylanguage.countrycode
+WHERE countrylanguage.countrylanguage = 'English'
+  AND countrylanguage.percentage = (SELECT max_percentage
+                                    FROM highest_language_percentage
+                                    WHERE countrycode = country.code);
+
+===============================================================================
