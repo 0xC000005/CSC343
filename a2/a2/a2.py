@@ -231,8 +231,8 @@ def test_basics() -> None:
     """Test basic aspects of the A2 methods.
     """
     # TODO: Change to your username here to connect to your own database:
-    dbname = "csc343h-username"
-    user = "username"
+    dbname = "csc343h-zha10626"
+    user = "zha10626"
     password = ""
 
     # The following uses the relative paths to the schema file and the data file

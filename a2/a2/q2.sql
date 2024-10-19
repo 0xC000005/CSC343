@@ -21,7 +21,7 @@ CREATE TABLE q2
 -- Generate a summary of employee activity over all time represented in the database. For every employee
 -- in the clinic, generate the information in the following tables. For every value below, report 0 or 0.0 (not
 -- NULL) for missing data, unless explicitly specified otherwise. Assume that an employee has “worked with” a
--- client/patient/other employee if they were scheduled on the same appointment. You will likely find COALESCE
+-- client/patient/another employee if they were scheduled for the same appointment. You will likely find COALESCE
 -- useful here.
 
 -- Do this for each of the views that define your intermediate steps.
@@ -130,7 +130,7 @@ ORDER BY employee.e_id;
 
 
 -- Your query that answers the question goes below the "insert into" line:
--- INSERT INTO q2
+INSERT INTO q2
 SELECT employee.e_id,
        employee.name,
        EXTRACT(YEAR FROM employee.start_date) AS hire_year,
