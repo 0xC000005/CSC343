@@ -37,11 +37,10 @@ DROP VIEW IF EXISTS employee_num_coworkers CASCADE;
 DROP VIEW IF EXISTS employee_total_supplies CASCADE;
 
 
-
 -- Define views for your intermediate steps here:
 CREATE VIEW employee_num_appointments AS
 WITH employee_num_appointments_not_complete AS
-         (SELECT DISTINCT employee.e_id, COUNT(appointment.a_id)
+         (SELECT DISTINCT employee.e_id, COUNT(DISTINCT appointment.a_id)
           FROM employee
                    JOIN scheduledprocedurestaff ON employee.e_id = scheduledprocedurestaff.e_id
                    JOIN appointment ON scheduledprocedurestaff.a_id = appointment.a_id
@@ -53,26 +52,97 @@ FROM employee
 ORDER BY employee.e_id;
 
 
+-- the number of day worked is the distinct appointment date
 CREATE VIEW employee_num_days_worked AS
-SELECT e_id, current_date - employee.start_date AS days_worked
+SELECT employee.e_id, COUNT(DISTINCT a.scheduled_date) AS days_worked
 FROM employee
+         JOIN scheduledprocedurestaff ON employee.e_id = scheduledprocedurestaff.e_id
+         JOIN appointment a on a.a_id = scheduledprocedurestaff.a_id
+group by employee.e_id
 ORDER BY e_id;
 
 
-CREATE VIEW employee_avg_appointment_len AS
-WITH employee_avg_appointment_len_not_complete AS
-         (SELECT employee.e_id, AVG(appointment.end_time - appointment.start_time) AS avg_appointment_len
-          FROM employee
-                   JOIN scheduledprocedurestaff ON employee.e_id = scheduledprocedurestaff.e_id
-                   JOIN appointment ON scheduledprocedurestaff.a_id = appointment.a_id
-          GROUP BY employee.e_id
-          ORDER BY employee.e_id)
-SELECT employee.e_id,
-       COALESCE(employee_avg_appointment_len_not_complete.avg_appointment_len, INTERVAL '0 hours') AS avg_duration
-FROM employee
-         LEFT JOIN employee_avg_appointment_len_not_complete
-                   ON employee.e_id = employee_avg_appointment_len_not_complete.e_id
-ORDER BY employee.e_id;
+-- CREATE VIEW employee_avg_appointment_len AS
+-- WITH employee_avg_appointment_len_not_complete AS
+--          (SELECT employee.e_id, AVG(appointment.end_time - appointment.start_time) AS avg_appointment_len
+--           FROM employee
+--                    JOIN scheduledprocedurestaff ON employee.e_id = scheduledprocedurestaff.e_id
+--                    JOIN appointment ON scheduledprocedurestaff.a_id = appointment.a_id
+--           GROUP BY employee.e_id
+--           ORDER BY employee.e_id)
+-- SELECT employee.e_id,
+--        COALESCE(employee_avg_appointment_len_not_complete.avg_appointment_len, INTERVAL '0 hours') AS avg_duration
+-- FROM employee
+--          LEFT JOIN employee_avg_appointment_len_not_complete
+--                    ON employee.e_id = employee_avg_appointment_len_not_complete.e_id
+-- ORDER BY employee.e_id;
+
+
+CREATE OR REPLACE VIEW employee_avg_appointment_len AS
+WITH employee_appointment_durations AS (SELECT DISTINCT e.e_id,
+                                                        a.a_id,
+                                                        a.scheduled_date,
+                                                        a.end_time - a.start_time AS appointment_duration
+                                        FROM employee e
+                                                 LEFT JOIN scheduledprocedurestaff sps ON e.e_id = sps.e_id
+                                                 LEFT JOIN appointment a ON sps.a_id = a.a_id
+                                        WHERE a.scheduled_date <= CURRENT_DATE -- Only consider appointments up to the current date
+)
+SELECT e.e_id,
+       COALESCE(
+               AVG(ead.appointment_duration),
+               INTERVAL '0 hours'
+       ) AS avg_duration
+FROM employee e
+         LEFT JOIN employee_appointment_durations ead ON e.e_id = ead.e_id
+GROUP BY e.e_id
+ORDER BY e.e_id;
+
+
+WITH employee_appointment_durations AS (SELECT DISTINCT ON (e.e_id, a.a_id)
+                                            e.e_id,
+                                                        a.a_id,
+                                                        a.scheduled_date,
+                                                        a.end_time - a.start_time AS appointment_duration
+                                        FROM employee e
+                                                 JOIN scheduledprocedurestaff sps ON e.e_id = sps.e_id
+                                                 JOIN appointment a ON sps.a_id = a.a_id
+                                        WHERE a.scheduled_date <= CURRENT_DATE
+                                          AND e.e_id = 7)
+SELECT e.e_id,
+       COALESCE(
+               AVG(ead.appointment_duration),
+               INTERVAL '0 hours'
+       ) AS avg_duration
+FROM employee e
+         LEFT JOIN employee_appointment_durations ead ON e.e_id = ead.e_id
+GROUP BY e.e_id
+ORDER BY e.e_id;
+
+
+WITH employee_appointment_durations AS (
+    SELECT DISTINCT ON (e.e_id, a.a_id)
+        e.e_id,
+        a.end_time - a.start_time AS appointment_duration
+    FROM
+        employee e
+    JOIN scheduledprocedurestaff sps ON e.e_id = sps.e_id
+    JOIN appointment a ON sps.a_id = a.a_id
+    WHERE a.scheduled_date <= CURRENT_DATE
+        AND e.e_id = 7
+)
+SELECT
+    e.e_id,
+    COALESCE(
+        AVG(ead.appointment_duration),
+        INTERVAL '0 hours'
+    ) AS avg_appointment_len
+FROM
+    employee e
+LEFT JOIN employee_appointment_durations ead ON e.e_id = ead.e_id
+GROUP BY e.e_id
+ORDER BY e.e_id;
+
 
 
 CREATE VIEW employee_clients_helped AS
@@ -133,14 +203,14 @@ ORDER BY employee.e_id;
 INSERT INTO q2
 SELECT employee.e_id,
        employee.name,
-       EXTRACT(YEAR FROM employee.start_date) AS hire_year,
-       COALESCE(employee_num_appointments.count, 0) AS num_appointments,
-       COALESCE(employee_num_days_worked.days_worked, 0) AS days_worked,
+       EXTRACT(YEAR FROM employee.start_date)                                  AS hire_year,
+       COALESCE(employee_num_appointments.count, 0)                            AS num_appointments,
+       COALESCE(employee_num_days_worked.days_worked, 0)                       AS days_worked,
        COALESCE(employee_avg_appointment_len.avg_duration, INTERVAL '0 hours') AS avg_appointment_len,
-       COALESCE(employee_clients_helped.clients_helped, 0) AS clients_helped,
-       COALESCE(employee_patients_helped.patients_helped, 0) AS patients_helped,
-       COALESCE(employee_num_coworkers.unique_coworkers, 0) AS num_coworkers,
-       COALESCE(employee_total_supplies.total_supplies, 0) AS total_supplies
+       COALESCE(employee_clients_helped.clients_helped, 0)                     AS clients_helped,
+       COALESCE(employee_patients_helped.patients_helped, 0)                   AS patients_helped,
+       COALESCE(employee_num_coworkers.unique_coworkers, 0)                    AS num_coworkers,
+       COALESCE(employee_total_supplies.total_supplies, 0)                     AS total_supplies
 FROM employee
          LEFT JOIN employee_num_appointments ON employee.e_id = employee_num_appointments.e_id
          LEFT JOIN employee_num_days_worked ON employee.e_id = employee_num_days_worked.e_id
